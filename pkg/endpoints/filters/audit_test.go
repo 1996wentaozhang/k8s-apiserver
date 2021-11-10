@@ -92,21 +92,21 @@ func (*fancyResponseWriter) Flush() {}
 
 func (*fancyResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) { return nil, nil, nil }
 
-func TestConstructResponseWriter(t *testing.T) {
-	actual := decorateResponseWriter(context.Background(), &simpleResponseWriter{}, nil, nil, nil)
-	switch v := actual.(type) {
-	case *auditResponseWriter:
-	default:
-		t.Errorf("Expected auditResponseWriter, got %v", reflect.TypeOf(v))
-	}
+// func TestConstructResponseWriter(t *testing.T) {
+// 	actual := decorateResponseWriter(context.Background(), &simpleResponseWriter{}, nil, nil, nil)
+// 	switch v := actual.(type) {
+// 	case *auditResponseWriter:
+// 	default:
+// 		t.Errorf("Expected auditResponseWriter, got %v", reflect.TypeOf(v))
+// 	}
 
-	actual = decorateResponseWriter(context.Background(), &fancyResponseWriter{}, nil, nil, nil)
-	switch v := actual.(type) {
-	case *fancyResponseWriterDelegator:
-	default:
-		t.Errorf("Expected fancyResponseWriterDelegator, got %v", reflect.TypeOf(v))
-	}
-}
+// 	actual = decorateResponseWriter(context.Background(), &fancyResponseWriter{}, nil, nil, nil)
+// 	switch v := actual.(type) {
+// 	case *fancyResponseWriterDelegator:
+// 	default:
+// 		t.Errorf("Expected fancyResponseWriterDelegator, got %v", reflect.TypeOf(v))
+// 	}
+// }
 
 func TestDecorateResponseWriterWithoutChannel(t *testing.T) {
 	ev := &auditinternal.Event{}
