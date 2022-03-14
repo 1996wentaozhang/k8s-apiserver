@@ -43,17 +43,18 @@ type ConvertabilityChecker interface {
 	VersionsForGroupKind(gk schema.GroupKind) []schema.GroupVersion
 }
 
-// APIGroupVersion is a helper for exposing rest.Storage objects as http.Handlers via go-restful
-// It handles URLs of the form:
-// /${storage_key}[/${object_name}]
-// Where 'storage_key' points to a rest.Storage object stored in storage.
+// 帮助函数:通过go-restful将rest.Storage对象暴露为http.Handlers
+// 处理的URL为以下形式:
+// 	/${storage_key}[/${object_name}]
+// 其中'storage_key'指向一个rest.Storage对象
 // This object should contain all parameterization necessary for running a particular API version
 type APIGroupVersion struct {
+	// 父资源->对应Storage对象
 	Storage map[string]rest.Storage
 
 	Root string
 
-	// GroupVersion is the external group version
+	// 外部group version
 	GroupVersion schema.GroupVersion
 
 	// OptionsExternalVersion controls the Kubernetes APIVersion used for common objects in the apiserver
@@ -69,12 +70,12 @@ type APIGroupVersion struct {
 	// RootScopedKinds are the root scoped kinds for the primary GroupVersion
 	RootScopedKinds sets.String
 
-	// Serializer is used to determine how to convert responses from API methods into bytes to send over
-	// the wire.
+	// 用来决定如何转换"API methods的响应"到bytes(发送到write)
 	Serializer     runtime.NegotiatedSerializer
 	ParameterCodec runtime.ParameterCodec
 
-	Typer                 runtime.ObjectTyper
+	Typer runtime.ObjectTyper
+	// 包含根据kind和version实例化对象的方法
 	Creater               runtime.ObjectCreater
 	Convertor             runtime.ObjectConvertor
 	ConvertabilityChecker ConvertabilityChecker

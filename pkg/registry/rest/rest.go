@@ -49,17 +49,17 @@ import (
 //    DELETE: Deleter -> NamedDeleter
 //    UPDATE: Update -> NamedUpdater
 
-// Storage is a generic interface for RESTful storage services.
-// Resources which are exported to the RESTful API of apiserver need to implement this interface. It is expected
-// that objects may implement any of the below interfaces.
+// Storage RESTful storage services的generic interface
+// 暴露为apiserver的RESTful API的资源,需要实现这个方法
+// It is expected that objects may implement any of the below interfaces.
 type Storage interface {
-	// New returns an empty object that can be used with Create and Update after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// 返回一个空的对象,当request数据放入后，可以用来Create和Update
+	// 该对象必须为pointer类型,因为要配合Codec.DecodeInto([]byte, runtime.Object)使用
 	New() runtime.Object
 }
 
-// Scoper indicates what scope the resource is at. It must be specified.
-// It is usually provided automatically based on your strategy.
+// 指示了资源的scope
+// 通常根据your strategy自动提供
 type Scoper interface {
 	// NamespaceScoped returns true if the storage is namespaced
 	NamespaceScoped() bool
@@ -92,13 +92,13 @@ type GroupVersionKindProvider interface {
 	GroupVersionKind(containingGV schema.GroupVersion) schema.GroupVersionKind
 }
 
-// GroupVersionAcceptor is used to determine if a particular GroupVersion is acceptable to send to an endpoint.
-// This is used for endpoints which accept multiple versions (which is extremely rare).
-// The only known instance is pods/evictions which accepts policy/v1, but also policy/v1beta1 for backwards compatibility.
+// 用于决定指定的GroupVersion，是否可以发送到一个endpoint
+// 这用于可以接受多种版本的endpoint(非常稀少,例:pods/evictions为了后向兼容接受policy/v1和policy/v1beta1)
 type GroupVersionAcceptor interface {
 	AcceptsGroupVersion(gv schema.GroupVersion) bool
 }
 
+// 功能:获取符合与提供的字段和标签条件匹配的资源。
 // Lister is an object that can retrieve resources that match the provided field and label criteria.
 type Lister interface {
 	// NewList returns an empty object that can be used with the List call.
@@ -106,21 +106,22 @@ type Lister interface {
 	NewList() runtime.Object
 	// List selects resources in the storage which match to the selector. 'options' can be nil.
 	List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error)
-	// TableConvertor ensures all list implementers also implement table conversion
+	// T确保所有list实现，同时也实现了table conversion
 	TableConvertor
 }
 
+// 功能:指定名字，获取RESTful资源。
 // Getter is an object that can retrieve a named RESTful resource.
 type Getter interface {
-	// Get finds a resource in the storage by name and returns it.
-	// Although it can return an arbitrary error value, IsNotFound(err) is true for the
-	// returned error value err when the specified resource is not found.
+	// 根据名字获取对象
+	// 虽然它可以返回任意错误值，但 IsNotFound(err) 在指定资源未找到时返回的错误值 err 为真。
 	Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error)
 }
 
 // GetterWithOptions is an object that retrieve a named RESTful resource and takes
 // additional options on the get request. It allows a caller to also receive the
 // subpath of the GET request.
+// 它运行
 type GetterWithOptions interface {
 	// Get finds a resource in the storage by name and returns it.
 	// Although it can return an arbitrary error value, IsNotFound(err) is true for the
@@ -176,25 +177,28 @@ type CollectionDeleter interface {
 	DeleteCollection(ctx context.Context, deleteValidation ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *metainternalversion.ListOptions) (runtime.Object, error)
 }
 
-// Creater is an object that can create an instance of a RESTful object.
+// 功能:创建RESTful对象的实例
 type Creater interface {
-	// New returns an empty object that can be used with Create after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// 返回一个空的对象,当request数据放入后，可以用来Create和Update
+	// 该对象必须为pointer类型,因为要配合Codec.DecodeInto([]byte, runtime.Object)使用
 	New() runtime.Object
 
-	// Create creates a new version of a resource.
+	// 创建new version of a resource.
 	Create(ctx context.Context, obj runtime.Object, createValidation ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error)
 }
 
+// 功能:路径中使用name参数,创建RESTful对象的实例
 // NamedCreater is an object that can create an instance of a RESTful object using a name parameter.
 type NamedCreater interface {
-	// New returns an empty object that can be used with Create after request data has been put into it.
-	// This object must be a pointer type for use with Codec.DecodeInto([]byte, runtime.Object)
+	// 返回一个空的对象,当request数据放入后，可以用来Create和Update
+	// 该对象必须为pointer类型,因为要配合Codec.DecodeInto([]byte, runtime.Object)使用
 	New() runtime.Object
 
-	// Create creates a new version of a resource. It expects a name parameter from the path.
+	// Create creates a new version of a resource.
 	// This is needed for create operations on subresources which include the name of the parent
 	// resource in the path.
+	// 要求:在路径中有name参数
+	// 针对子资源:需要CreateOptions(包含路径中父资源的名字)
 	Create(ctx context.Context, name string, obj runtime.Object, createValidation ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error)
 }
 
@@ -259,8 +263,7 @@ type Patcher interface {
 	Updater
 }
 
-// Watcher should be implemented by all Storage objects that
-// want to offer the ability to watch for changes through the watch api.
+// 所有希望通过watch api提供watch change的Storage对象均需实现该方法
 type Watcher interface {
 	// 'label' selects on labels; 'field' selects on the object's fields. Not all fields
 	// are supported; an error should be returned if 'field' tries to select on a field that
@@ -296,23 +299,26 @@ type Responder interface {
 	Error(err error)
 }
 
-// Connecter is a storage object that responds to a connection request.
+// 响应connection请求的storage对象
 type Connecter interface {
-	// Connect returns an http.Handler that will handle the request/response for a given API invocation.
+	// 返回一个http.Handler,用来响应给定API调用的request/response.
 	// The provided responder may be used for common API responses. The responder will write both status
-	// code and body, so the ServeHTTP method should exit after invoking the responder. The Handler will
-	// be used for a single API request and then discarded. The Responder is guaranteed to write to the
-	// same http.ResponseWriter passed to ServeHTTP.
+	// code and body, so the ServeHTTP method should exit after invoking the responder.
+	// 这个Handler只会被用于一个API请求,之后会被丢弃.
+	// 保证:Responder会写入到，传递给ServeHTTP的同一个http.ResponseWriter.
 	Connect(ctx context.Context, id string, options runtime.Object, r Responder) (http.Handler, error)
 
-	// NewConnectOptions returns an empty options object that will be used to pass
-	// options to the Connect method. If nil, then a nil options object is passed to
-	// Connect. It may return a bool and a string. If true, the value of the request
+	// 出参:
+	//  1.
+	// 	返回一个空的options对象,用于给Connect()传递参数
+	// 	如果返回nil,将会传递一个空Options对象给Connect()
+	// 	2.bool, string
+	// It may return a bool and a string. If true, the value of the request
 	// path below the object will be included as the named string in the serialization
 	// of the runtime object.
 	NewConnectOptions() (runtime.Object, bool, string)
 
-	// ConnectMethods returns the list of HTTP methods handled by Connect
+	// 返回一个列表[Connect支持的HTTP methods]
 	ConnectMethods() []string
 }
 
@@ -327,8 +333,7 @@ type ResourceStreamer interface {
 	InputStream(ctx context.Context, apiVersion, acceptHeader string) (stream io.ReadCloser, flush bool, mimeType string, err error)
 }
 
-// StorageMetadata is an optional interface that callers can implement to provide additional
-// information about their Storage objects.
+// 可选接口:callers可以实现该接口去提供Storage对象的额外信息
 type StorageMetadata interface {
 	// ProducesMIMETypes returns a list of the MIME types the specified HTTP verb (GET, POST, DELETE,
 	// PATCH) can respond with.
@@ -339,12 +344,9 @@ type StorageMetadata interface {
 	ProducesObject(verb string) interface{}
 }
 
-// StorageVersionProvider is an optional interface that a storage object can
-// implement if it wishes to disclose its storage version.
+// 可选接口:如果storage对象希望disclose its storage version
 type StorageVersionProvider interface {
-	// StorageVersion returns a group versioner, which will outputs the gvk
-	// an object will be converted to before persisted in etcd, given a
-	// list of kinds the object might belong to.
+	// 返回group versioner[可以输出一个对象在存入ETCD之前可以转换成的gvk,一系列对象可能属于的kinds]
 	StorageVersion() runtime.GroupVersioner
 }
 

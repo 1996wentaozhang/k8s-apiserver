@@ -55,18 +55,18 @@ const (
 )
 
 type APIInstaller struct {
-	group             *APIGroupVersion
-	prefix            string // Path prefix where API resources are to be registered.
+	group             *APIGroupVersion // 帮助函数:通过go-restful将rest.Storage对象暴露为http.Handlers
+	prefix            string           // API资源注册时的前缀
 	minRequestTimeout time.Duration
 }
 
 // Struct capturing information about an action ("GET", "POST", "WATCH", "PROXY", etc).
 type action struct {
 	Verb          string               // Verb identifying the action ("GET", "POST", "WATCH", "PROXY", etc).
-	Path          string               // The path of the action
-	Params        []*restful.Parameter // List of parameters associated with the action.
-	Namer         handlers.ScopeNamer
-	AllNamespaces bool // true iff the action is namespaced but works on aggregate result for all namespaces
+	Path          string               // 路径
+	Params        []*restful.Parameter // 与action相关的参数列表
+	Namer         handlers.ScopeNamer  // 从requests和objects中获取name
+	AllNamespaces bool                 // true iff the action is namespaced but works on aggregate result for all namespaces
 }
 
 // An interface to see if one storage supports override its default verb for monitoring
@@ -95,21 +95,23 @@ var toDiscoveryKubeVerb = map[string]string{
 	"WATCHLIST":        "watch",
 }
 
-// Install handlers for API resources.
+// 注册API resources的handlers
 func (a *APIInstaller) Install() ([]metav1.APIResource, []*storageversion.ResourceInfo, *restful.WebService, []error) {
 	var apiResources []metav1.APIResource
 	var resourceInfos []*storageversion.ResourceInfo
 	var errors []error
-	ws := a.newWebService()
+	ws := a.newWebService() // 服务器
 
 	// Register the paths in a deterministic (sorted) order to get a deterministic swagger spec.
-	paths := make([]string, len(a.group.Storage))
+	// 以确定性（排序）顺序注册路径以获得确定性的swagger spec。
+	paths := make([]string, len(a.group.Storage)) // 一个rest.Storage对应一个路径
 	var i int = 0
 	for path := range a.group.Storage {
 		paths[i] = path
 		i++
 	}
 	sort.Strings(paths)
+	// 注册
 	for _, path := range paths {
 		apiResource, resourceInfo, err := a.registerResourceHandlers(path, a.group.Storage[path], ws)
 		if err != nil {
@@ -164,9 +166,9 @@ func GetResourceKind(groupVersion schema.GroupVersion, storage rest.Storage, typ
 	if gvkProvider, ok := storage.(rest.GroupVersionKindProvider); ok {
 		return gvkProvider.GroupVersionKind(groupVersion), nil
 	}
-
+	// 调用storage接口的New()
 	object := storage.New()
-	fqKinds, _, err := typer.ObjectKinds(object)
+	fqKinds, _, err := typer.ObjectKinds(object) // 返回指定对象所有可能的group,version,kind
 	if err != nil {
 		return schema.GroupVersionKind{}, err
 	}
@@ -188,37 +190,41 @@ func GetResourceKind(groupVersion schema.GroupVersion, storage rest.Storage, typ
 	return fqKindToRegister, nil
 }
 
+// 注册资源的handler
+// 入参:[路径/storage对象/服务器对象]
 func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storage, ws *restful.WebService) (*metav1.APIResource, *storageversion.ResourceInfo, error) {
 	admit := a.group.Admit
-
+	// 外部group version
 	optionsExternalVersion := a.group.GroupVersion
 	if a.group.OptionsExternalVersion != nil {
 		optionsExternalVersion = *a.group.OptionsExternalVersion
 	}
-
+	// 根据路径返回"资源"和"子资源(可能为nil)"的名称
 	resource, subresource, err := splitSubresource(path)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	//
 	group, version := a.group.GroupVersion.Group, a.group.GroupVersion.Version
-
+	// 返回可能匹配的GVK
 	fqKindToRegister, err := GetResourceKind(a.group.GroupVersion, storage, a.group.Typer)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	// 根据kind和version实例化对象
 	versionedPtr, err := a.group.Creater.New(fqKindToRegister)
 	if err != nil {
 		return nil, nil, err
 	}
+	// 指针对象
 	defaultVersionedObject := indirectArbitraryPointer(versionedPtr)
 	kind := fqKindToRegister.Kind
 	isSubresource := len(subresource) > 0
 
-	// If there is a subresource, namespace scoping is defined by the parent resource
+	// 子资源的namespace域由父资源定义
 	namespaceScoped := true
 	if isSubresource {
+		// 获取父资源的Storage对象
 		parentStorage, ok := a.group.Storage[resource]
 		if !ok {
 			return nil, nil, fmt.Errorf("missing parent storage: %q", resource)
@@ -227,6 +233,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		if !ok {
 			return nil, nil, fmt.Errorf("%q must implement scoper", resource)
 		}
+		// bool:[父资源是否namespaceScoped]
 		namespaceScoped = scoper.NamespaceScoped()
 
 	} else {
@@ -236,22 +243,35 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		}
 		namespaceScoped = scoper.NamespaceScoped()
 	}
-
-	// what verbs are supported by the storage, used to know what verbs we support per path
-	creater, isCreater := storage.(rest.Creater)
-	namedCreater, isNamedCreater := storage.(rest.NamedCreater)
-	lister, isLister := storage.(rest.Lister)
-	getter, isGetter := storage.(rest.Getter)
+	// storage支持哪些动词,指示了每个路径支持的动词
+	// 1.create
+	creater, isCreater := storage.(rest.Creater)                // 功能:创建RESTful对象的实例
+	namedCreater, isNamedCreater := storage.(rest.NamedCreater) // 功能:路径中使用name参数,创建RESTful对象的实例
+	// 2.获取
+	lister, isLister := storage.(rest.Lister) // 功能:获取符合与提供的字段和标签条件匹配的资源。
+	getter, isGetter := storage.(rest.Getter) // 功能:指定名字,获取RESTful资源。
 	getterWithOptions, isGetterWithOptions := storage.(rest.GetterWithOptions)
+	// 3.删除
 	gracefulDeleter, isGracefulDeleter := storage.(rest.GracefulDeleter)
 	collectionDeleter, isCollectionDeleter := storage.(rest.CollectionDeleter)
+	// 4.更新
 	updater, isUpdater := storage.(rest.Updater)
 	patcher, isPatcher := storage.(rest.Patcher)
+	// 5.watch
 	watcher, isWatcher := storage.(rest.Watcher)
+	// 6.响应connection请求的storage对象[将请求通过http转发到其他地方]
 	connecter, isConnecter := storage.(rest.Connecter)
+	// 7.可选接口:callers可以实现该接口去提供Storage对象的额外信息
 	storageMeta, isMetadata := storage.(rest.StorageMetadata)
+	// 8.
+	// 	返回group versioner[可以输出一个对象在存入ETCD之前可以转换成的gvk,一系列对象可能属于的kinds]
 	storageVersionProvider, isStorageVersionProvider := storage.(rest.StorageVersionProvider)
+	// 9.
+	// 	用于决定指定的GroupVersion，是否可以发送到一个endpoint
+	//	这用于可以接受多种版本的endpoint(非常稀少,例:pods/evictions为了后向兼容接受policy/v1和policy/v1beta1)
 	gvAcceptor, _ := storage.(rest.GroupVersionAcceptor)
+
+	// ----------- 8 ----------
 	if !isMetadata {
 		storageMeta = defaultStorageMetadata{}
 	}
@@ -349,7 +369,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		}
 		versionedWatchEvent = indirectArbitraryPointer(versionedWatchEventPtr)
 	}
-
+	// ----------- 6.connect ----------
 	var (
 		connectOptions             runtime.Object
 		versionedConnectOptions    runtime.Object
@@ -357,13 +377,16 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		connectSubpath             bool
 	)
 	if isConnecter {
+		// 空options对象,用于给Connect()传递参数
+		// 子路径
 		connectOptions, connectSubpath, _ = connecter.NewConnectOptions()
 		if connectOptions != nil {
+			// 返回指定对象所有可能的group,version,kind
 			connectOptionsInternalKinds, _, err := a.group.Typer.ObjectKinds(connectOptions)
 			if err != nil {
 				return nil, nil, err
 			}
-
+			// 创建内部GVK的connectOptions对象
 			connectOptionsInternalKind = connectOptionsInternalKinds[0]
 			versionedConnectOptions, err = a.group.Creater.New(a.group.GroupVersion.WithKind(connectOptionsInternalKind.Kind))
 			if err != nil {
@@ -936,7 +959,9 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 			addParams(route, action.Params)
 			routes = append(routes, route)
 		case "CONNECT":
+			// 遍历支持的HTTP 方法
 			for _, method := range connecter.ConnectMethods() {
+				//
 				connectProducedObject := storageMeta.ProducesObject(method)
 				if connectProducedObject == nil {
 					connectProducedObject = "string"
@@ -1126,6 +1151,7 @@ func (defaultStorageMetadata) ProducesObject(verb string) interface{} {
 	return nil
 }
 
+// 检查给定的storage path是否为子资源的路径，返回资源和子资源
 // splitSubresource checks if the given storage path is the path of a subresource and returns
 // the resource and subresource components.
 func splitSubresource(path string) (string, string, error) {

@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -89,7 +90,7 @@ func Unauthorized(s runtime.NegotiatedSerializer) http.Handler {
 			responsewriters.InternalError(w, req, errors.New("no RequestInfo found in the context"))
 			return
 		}
-
+		log.Infof("failedHandler.Unauthorized,ctx[%+v]", ctx)
 		gv := schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}
 		responsewriters.ErrorNegotiated(apierrors.NewUnauthorized("Unauthorized"), s, gv, w, req)
 	})

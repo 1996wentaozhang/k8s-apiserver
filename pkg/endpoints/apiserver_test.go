@@ -141,9 +141,11 @@ func init() {
 }
 
 func addGrouplessTypes() {
+	// v1
 	scheme.AddKnownTypes(grouplessGroupVersion,
 		&genericapitesting.Simple{}, &genericapitesting.SimpleList{}, &metav1.ListOptions{},
 		&metav1.DeleteOptions{}, &genericapitesting.SimpleGetOptions{}, &genericapitesting.SimpleRoot{})
+	// 内部版本
 	scheme.AddKnownTypes(grouplessInternalGroupVersion,
 		&genericapitesting.Simple{}, &genericapitesting.SimpleList{},
 		&genericapitesting.SimpleGetOptions{}, &genericapitesting.SimpleRoot{})
@@ -187,10 +189,12 @@ func init() {
 	// Certain API objects are returned regardless of the contents of storage:
 	// api.Status is returned in errors
 
+	// 3个组[groupless/test/new]
 	addGrouplessTypes()
 	addTestTypes()
 	addNewTestTypes()
 
+	// 转换函数:将给定kind的field selectors,从给定version转换到internal version
 	scheme.AddFieldLabelConversionFunc(grouplessGroupVersion.WithKind("Simple"),
 		func(label, value string) (string, string, error) {
 			return label, value, nil
@@ -536,7 +540,7 @@ type ConnecterRESTStorage struct {
 
 	emptyConnectOptions    runtime.Object
 	receivedConnectOptions runtime.Object
-	receivedID             string
+	receivedID             string // 上一级资源的ID
 	receivedResponder      rest.Responder
 	takesPath              string
 }
